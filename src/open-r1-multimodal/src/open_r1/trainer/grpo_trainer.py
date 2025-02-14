@@ -33,7 +33,6 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
     Qwen2VLForConditionalGeneration,
-    Qwen2_5_VLForConditionalGeneration,
     Trainer,
     TrainerCallback,
     is_wandb_available,
@@ -58,6 +57,21 @@ if is_wandb_available():
 # What we call a reward function is a callable that takes a list of prompts and completions and returns a list of
 # rewards. When it's a string, it's a model ID, so it's loaded as a pretrained model.
 RewardFunc = Union[str, PreTrainedModel, Callable[[list, list], list[float]]]
+
+def find_target_linear_names(model, num_lora_modules=-1, lora_namespan_exclude=[], verbose=True):
+    linear_cls = torch.nn.modules.Linear
+    embedding_cls = torch.nn.modules.Embedding
+    lora_module_names = []
+
+    for name, module in model.named_modules():
+        if any(ex_keyword in name for ex_keyword in lora_namespan_exclude):
+            continue
+        if isinstance(module, (linear_cls, embedding_cls)):
+            lora_module_names.append(name)
+    
+    if num_lora_modules > 0:
+        lora_module_names = lora_module_names[-num_lora_modules:]
+    return lora_module_names
 
 
 class Qwen2VLGRPOTrainer(Trainer):
@@ -189,8 +203,6 @@ class Qwen2VLGRPOTrainer(Trainer):
             )
             if "Qwen2-VL" in model_id:
                 model = Qwen2VLForConditionalGeneration.from_pretrained(model, **model_init_kwargs)
-            elif "Qwen2.5-VL" in model_id:
-                model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model, **model_init_kwargs)
             elif "Aria" in model_id:
                 model_init_kwargs.pop("use_cache")
                 model = AriaForConditionalGeneration.from_pretrained(model, **model_init_kwargs)
@@ -205,14 +217,15 @@ class Qwen2VLGRPOTrainer(Trainer):
                 )
 
         if peft_config is not None:
+            lora_namespan_exclude = ['lm_head', 'embed_tokens']
+            print([name for name, module in model.named_modules()])
+            peft_config.target_modules = find_target_linear_names(model, lora_namespan_exclude=lora_namespan_exclude)
             model = get_peft_model(model, peft_config)
 
         # Reference model
         if is_deepspeed_zero3_enabled():
             if "Qwen2-VL" in model_id:
                 self.ref_model = Qwen2VLForConditionalGeneration.from_pretrained(model_id, **model_init_kwargs)
-            elif "Qwen2.5-VL" in model_id:
-                self.ref_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_id, **model_init_kwargs)
             elif "Aria" in model_id:
                 self.ref_model = AriaForConditionalGeneration.from_pretrained(model_id, **model_init_kwargs)
             else:
