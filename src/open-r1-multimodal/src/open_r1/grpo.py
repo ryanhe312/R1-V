@@ -18,7 +18,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset, load_from_disk, DatasetDict
 from transformers import Qwen2VLForConditionalGeneration
 
 from math_verify import parse, verify
@@ -76,9 +76,14 @@ def accuracy_reward(completions, solution, **kwargs):
                 content_match = re.search(r'<answer>(.*?)</answer>', content)
                 student_answer = content_match.group(1).strip() if content_match else content.strip()
                 
-                # Compare the extracted answers
-                if student_answer == ground_truth:
-                    reward = 1.0
+                # Compare the extracted answers split by space
+                # 1 for exact match, 0 for no match, 0.5 for partial match
+                reward = 0
+                for word in ground_truth.split():
+                    if word in student_answer.split():
+                        reward += 1
+                reward = reward / len(ground_truth.split())
+                
             except Exception:
                 pass  # Keep reward as 0.0 if both methods fail
                 
@@ -119,7 +124,11 @@ def main(script_args, training_args, model_args):
     reward_funcs = [reward_funcs_registry[func] for func in script_args.reward_funcs]
 
     # Load the dataset
-    dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
+    try:
+        dataset = load_from_disk(script_args.dataset_name)
+        dataset = DatasetDict({"train": dataset})
+    except FileNotFoundError:
+        dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
 
 
     # Format into conversation
