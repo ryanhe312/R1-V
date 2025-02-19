@@ -79,8 +79,8 @@ def accuracy_reward(completions, solution, **kwargs):
                 # Compare the extracted answers split by space
                 # 1 for exact match, 0 for no match, 0.5 for partial match
                 reward = 0
-                for word in ground_truth.split():
-                    if word in student_answer.split():
+                for word1, word2 in zip(ground_truth.split(),student_answer.split()):
+                    if word1 == word2:
                         reward += 1
                 reward = reward / len(ground_truth.split())
                 
