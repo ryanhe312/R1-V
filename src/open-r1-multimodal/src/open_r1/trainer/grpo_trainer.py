@@ -23,8 +23,8 @@ import transformers
 from datasets import Dataset, IterableDataset
 from packaging import version
 from transformers import (
-    AriaForConditionalGeneration,
-    AriaProcessor,
+    # AriaForConditionalGeneration,
+    # AriaProcessor,
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
     AutoProcessor,
@@ -33,7 +33,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
     Qwen2VLForConditionalGeneration,
-    Qwen2_5_VLForConditionalGeneration,
+    # Qwen2_5_VLForConditionalGeneration,
     Trainer,
     TrainerCallback,
     is_wandb_available,
@@ -480,7 +480,9 @@ class Qwen2VLGRPOTrainer(Trainer):
         # Normalize the rewards to compute the advantages
         mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
         std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-        advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
+        # advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
+        advantages = rewards - (mean_grouped_rewards * self.num_generations - rewards) / (self.num_generations - 1)
+        print(advantages)
 
         # x - x.detach() allows for preserving gradients from x
         per_token_loss = torch.exp(per_token_logps - per_token_logps.detach()) * advantages.unsqueeze(1)
